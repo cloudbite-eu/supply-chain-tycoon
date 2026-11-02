@@ -9,6 +9,7 @@ header img { width: 44px; height: 44px; border-radius: 10px; }
 main { max-width: 720px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; }
 h1 { font-size: 32px; line-height: 1.2; margin: 0 0 8px; text-wrap: balance; }
 h2 { font-size: 21px; margin: 36px 0 8px; }
+.lead { font-size: 20px; line-height: 1.5; font-weight: 600; margin: 12px 0 20px; }
 p, li { color: var(--ink); }
 .muted { color: var(--muted); font-size: 15px; }
 a { color: var(--accent); }
