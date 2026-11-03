@@ -1,0 +1,60 @@
+# The app's daily world feed.
+# The scheduled world update may push only to branches named claude/..., so it pushes the day's world file to a
+# branch claude/feed-<date>. This workflow checks the file, publishes it on main, where GitHub Pages serves it to the
+# iPhone and iPad app (https://cloudbite-eu.github.io/supply-chain-tycoon/feed/world.json), and removes the branch.
+name: Publish the app feed
+
+on:
+  push:
+    branches: ['claude/feed-*']
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: app-feed
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Take the world file from the pushed branch
+        run: |
+          git fetch -q --no-tags --depth=1 origin "$GITHUB_SHA"
+          git show "$GITHUB_SHA:docs/feed/world.json" > "$RUNNER_TEMP/world.json"
+
+      - name: Check it
+        run: python3 .github/feed-check.py "$RUNNER_TEMP/world.json" docs/feed/world.json
+
+      - name: Publish it on main
+        run: |
+          put() {
+            cp "$RUNNER_TEMP/world.json" docs/feed/world.json
+            if git diff --quiet; then return 1; fi
+            label=$(python3 -c 'import json; print(json.load(open("docs/feed/world.json"))["label"])')
+            git -c user.name="Supply Chain Tycoon" -c user.email="hello@cloudbite.eu" commit -q -am "$label"
+          }
+          if ! put; then echo "The feed already has this file."; exit 0; fi
+          for i in 1 2 3; do
+            if git push -q origin HEAD:main; then echo "Published."; exit 0; fi
+            git fetch -q --depth=1 origin main && git reset -q --hard FETCH_HEAD
+            python3 .github/feed-check.py "$RUNNER_TEMP/world.json" docs/feed/world.json || exit 1
+            put || { echo "The feed already has this file."; exit 0; }
+          done
+          exit 1
+
+      - name: Ask GitHub Pages to rebuild
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" --silent
+
+      - name: Remove the branch
+        run: git push -q origin --delete "$GITHUB_REF_NAME"
